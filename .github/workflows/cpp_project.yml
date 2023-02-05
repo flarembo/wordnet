@@ -1,0 +1,72 @@
+name: CPP project with GTest CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - name: Setup dependencies
+      run: |
+        sudo apt-get install -y clang-tidy-10
+        sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-10 100
+    - name: Checkout submodules
+      uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Check for bad words
+      run: "! grep -R -n -w -f .bad_words src include"
+    - name: Run clang format
+      uses: DoozyX/clang-format-lint-action@v0.11
+      with:
+        source: '.'
+        exclude: './googletest ./tests'
+        extensions: 'h,cpp'
+        clangFormatVersion: 11
+    - name: Setup ICA
+      uses: actions/checkout@v2
+      with:
+        repository: 'Kurkin/ica-lint-action'
+        path: ica
+    - name: Prepare build dir
+      run: mkdir build
+    - name: Generate build files using cmake
+      run: cmake .. -DUSE_CLANG_TIDY=TRUE -DPATH_TO_ICA="${{ github.workspace }}/ica/ica/libica-plugin.so"
+      working-directory: ./build
+    - name: Run make
+      run: make
+      working-directory: ./build
+    - name: Run tests
+      timeout-minutes: 10
+      run: ./tests/runUnitTests
+      working-directory: ./build
+    - name: Prepare ASAN build dir
+      run: mkdir build_asan
+    - name: Generate ASAN build files using cmake
+      run: cmake .. -DCMAKE_BUILD_TYPE=ASAN
+      working-directory: ./build_asan
+    - name: Run ASAN make
+      run: make
+      working-directory: ./build_asan
+    - name: Run ASAN tests
+      timeout-minutes: 15
+      run: ./tests/runUnitTests
+      working-directory: ./build_asan
+    - name: Prepare USAN build dir
+      run: mkdir build_usan
+    - name: Generate USAN build files using cmake
+      run: cmake .. -DCMAKE_BUILD_TYPE=USAN
+      working-directory: ./build_usan
+    - name: Run USAN make
+      run: make
+      working-directory: ./build_usan
+    - name: Run USAN tests
+      timeout-minutes: 10
+      run: ./tests/runUnitTests
+      working-directory: ./build_usan
